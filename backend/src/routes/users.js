@@ -2,6 +2,8 @@ import { Router } from 'express'
 import mongoose from 'mongoose'
 import { authenticate, clearAuthCookie, comparePassword, hashPassword, publicUser } from '../auth.js'
 import { Project } from '../models/Project.js'
+import { ProjectCollection } from '../models/ProjectCollection.js'
+import { ProjectProgress } from '../models/ProjectProgress.js'
 import { User } from '../models/User.js'
 
 const router = Router()
@@ -88,7 +90,11 @@ router.delete('/me', async (request, response, next) => {
     const password = String(request.body.password || '')
     const user = await User.findById(request.user.id).select('+passwordHash')
     if (!user || !(await comparePassword(password, user.passwordHash))) return response.status(401).json({ message: 'Password is incorrect.' })
-    await Project.deleteMany({ createdBy: user.id })
+    await Promise.all([
+      Project.deleteMany({ createdBy: user.id }),
+      ProjectCollection.deleteMany({ userId: user.id }),
+      ProjectProgress.deleteMany({ userId: user.id }),
+    ])
     await user.deleteOne()
     clearAuthCookie(response)
     return response.status(204).end()

@@ -3,6 +3,8 @@ import { Router } from 'express'
 import mongoose from 'mongoose'
 import { authenticate, authorize } from '../auth.js'
 import { Project } from '../models/Project.js'
+import { ProjectCorrection } from '../models/ProjectCorrection.js'
+import { ProjectProgress } from '../models/ProjectProgress.js'
 import { User } from '../models/User.js'
 import { starterProjects } from '../data/projects.js'
 
@@ -94,6 +96,22 @@ router.patch('/moderation/bulk', authenticate, authorize('admin', 'moderator'), 
   } catch (error) { return next(error) }
 })
 
+router.get('/corrections', authenticate, authorize('admin'), async (_request, response, next) => {
+  try {
+    const items = await ProjectCorrection.find().sort({ status: 1, createdAt: -1 }).limit(100).lean()
+    return response.json({ items })
+  } catch (error) { return next(error) }
+})
+
+router.patch('/corrections/:reportId', authenticate, authorize('admin'), async (request, response, next) => {
+  try {
+    if (!['resolved', 'dismissed', 'pending'].includes(request.body.status)) return response.status(400).json({ message: 'Choose a valid report status.' })
+    const report = await ProjectCorrection.findByIdAndUpdate(request.params.reportId, { status: request.body.status }, { new: true, runValidators: true })
+    if (!report) return response.status(404).json({ message: 'Correction report not found.' })
+    return response.json({ report })
+  } catch (error) { return next(error) }
+})
+
 router.get('/analytics', async (_request, response, next) => {
   try {
     const connected = mongoose.connection.readyState === 1
@@ -139,6 +157,52 @@ router.get('/similar/:id', async (request, response, next) => {
     if (!project) return response.status(404).json({ message: 'Project not found.' })
     const matches = await Project.find({ status: 'approved', _id: { $ne: project._id }, $or: [{ category: project.category }, { tags: { $in: project.tags || [] } }] }).limit(5).lean()
     return response.json(matches)
+  } catch (error) { return next(error) }
+})
+
+router.get('/:id/progress', authenticate, async (request, response, next) => {
+  try {
+    const project = await Project.findOne({ ...projectIdFilter(request.params.id), status: 'approved' }).select('id _id').lean()
+    if (!project) return response.status(404).json({ message: 'Project not found.' })
+    const projectId = project.id || String(project._id)
+    const progress = await ProjectProgress.findOne({ userId: request.user.id, projectId }).lean()
+    return response.json({ completedMilestones: progress?.completedMilestones || [] })
+  } catch (error) { return next(error) }
+})
+
+router.put('/:id/progress', authenticate, async (request, response, next) => {
+  try {
+    const project = await Project.findOne({ ...projectIdFilter(request.params.id), status: 'approved' }).select('id _id milestones').lean()
+    if (!project) return response.status(404).json({ message: 'Project not found.' })
+    const milestoneCount = project.milestones?.length || 4
+    const completedMilestones = request.body.completedMilestones
+    if (!Array.isArray(completedMilestones) || completedMilestones.some((index) => !Number.isInteger(index) || index < 0 || index >= milestoneCount)) return response.status(400).json({ message: 'Choose valid project milestones.' })
+    const projectId = project.id || String(project._id)
+    const progress = await ProjectProgress.findOneAndUpdate(
+      { userId: request.user.id, projectId },
+      { $set: { completedMilestones: [...new Set(completedMilestones)] } },
+      { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
+    )
+    return response.json({ completedMilestones: progress.completedMilestones })
+  } catch (error) { return next(error) }
+})
+
+router.post('/:id/corrections', async (request, response, next) => {
+  try {
+    const project = await Project.findOne({ ...projectIdFilter(request.params.id), status: 'approved' }).select('id _id title').lean()
+    if (!project) return response.status(404).json({ message: 'Project not found.' })
+    const message = String(request.body.message || '').trim()
+    const contactEmail = String(request.body.email || '').trim().toLowerCase()
+    if (message.length < 12 || message.length > 1000) return response.status(400).json({ message: 'Describe the correction in 12 to 1000 characters.' })
+    if (contactEmail && (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail) || contactEmail.length > 254)) return response.status(400).json({ message: 'Enter a valid email address.' })
+    await ProjectCorrection.create({
+      projectRef: project._id,
+      projectId: project.id || String(project._id),
+      projectTitle: project.title,
+      message,
+      contactEmail,
+    })
+    return response.status(201).json({ message: 'Thanks. Your correction was sent for review.' })
   } catch (error) { return next(error) }
 })
 

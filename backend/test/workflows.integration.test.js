@@ -4,7 +4,10 @@ import mongoose from 'mongoose'
 import request from 'supertest'
 import { app } from '../src/app.js'
 import { hashPassword } from '../src/auth.js'
+import { ProjectCollection } from '../src/models/ProjectCollection.js'
+import { ProjectCorrection } from '../src/models/ProjectCorrection.js'
 import { Project } from '../src/models/Project.js'
+import { ProjectProgress } from '../src/models/ProjectProgress.js'
 import { User } from '../src/models/User.js'
 
 test('student submission can be approved and saved', async () => {
@@ -13,7 +16,7 @@ test('student submission can be approved and saved', async () => {
   await mongoose.connect('mongodb://127.0.0.1:27017/ProjectPool', { dbName: databaseName })
   try {
     await mongoose.connection.dropDatabase()
-    await Promise.all([User.init(), Project.init()])
+    await Promise.all([User.init(), Project.init(), ProjectCollection.init(), ProjectProgress.init(), ProjectCorrection.init()])
     const registration = await request(app).post('/api/auth/register').send({
       name: 'Demo Student', email: `student-${process.pid}@example.test`, password: 'demo-password-long-enough',
     })
@@ -47,6 +50,33 @@ test('student submission can be approved and saved', async () => {
     const savedList = await request(app).get('/api/users/saved').set('Cookie', studentCookie)
     assert.equal(savedList.body.items.length, 1)
     assert.equal(savedList.body.items[0].title, 'Campus Study Map')
+
+    const collection = await request(app).post('/api/collections').set('Cookie', studentCookie).send({ name: 'Semester Project', description: 'Ideas for this term.' })
+    assert.equal(collection.status, 201, JSON.stringify(collection.body))
+    assert.equal(collection.body.isPublic, false)
+    const addToCollection = await request(app).post(`/api/collections/${collection.body.id}/projects/${submission.body.project.id}`).set('Cookie', studentCookie)
+    assert.equal(addToCollection.status, 200, JSON.stringify(addToCollection.body))
+    assert.equal(addToCollection.body.projects[0].title, 'Campus Study Map')
+
+    const progress = await request(app).put(`/api/projects/${submission.body.project.id}/progress`).set('Cookie', studentCookie).send({ completedMilestones: [0, 2] })
+    assert.equal(progress.status, 200, JSON.stringify(progress.body))
+    assert.deepEqual(progress.body.completedMilestones, [0, 2])
+
+    const sharedCollection = await request(app).patch(`/api/collections/${collection.body.id}`).set('Cookie', studentCookie).send({ isPublic: true })
+    assert.equal(sharedCollection.status, 200)
+    assert.ok(sharedCollection.body.shareId)
+    const publicCollection = await request(app).get(`/api/collections/shared/${sharedCollection.body.shareId}`)
+    assert.equal(publicCollection.status, 200)
+    assert.equal(publicCollection.body.projects[0].title, 'Campus Study Map')
+
+    const correction = await request(app).post(`/api/projects/${submission.body.project.id}/corrections`).send({ message: 'The current estimated timeline should mention user testing.' })
+    assert.equal(correction.status, 201, JSON.stringify(correction.body))
+    const correctionQueue = await request(app).get('/api/projects/corrections').set('Cookie', adminLogin.headers['set-cookie'])
+    assert.equal(correctionQueue.status, 200)
+    assert.equal(correctionQueue.body.items.length, 1)
+    const correctionReview = await request(app).patch(`/api/projects/corrections/${correctionQueue.body.items[0]._id}`).set('Cookie', adminLogin.headers['set-cookie']).send({ status: 'resolved' })
+    assert.equal(correctionReview.status, 200)
+    assert.equal(correctionReview.body.report.status, 'resolved')
   } finally {
     await mongoose.connection.dropDatabase()
     await mongoose.disconnect()

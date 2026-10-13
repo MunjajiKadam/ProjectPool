@@ -6,6 +6,7 @@ import helmet from 'helmet'
 import morgan from 'morgan'
 import mongoose from 'mongoose'
 import authRouter from './routes/auth.js'
+import collectionsRouter from './routes/collections.js'
 import projectsRouter from './routes/projects.js'
 import usersRouter from './routes/users.js'
 import openApi from './openapi.js'
@@ -36,6 +37,7 @@ app.get('/api/docs', (_request, response) => {
 })
 app.use('/api/auth', authRouter)
 app.use('/api/users', usersRouter)
+app.use('/api/collections', collectionsRouter)
 app.use('/api/projects', projectsRouter)
 app.use((request, response) => response.status(404).json({ message: `No route for ${request.method} ${request.path}` }))
 app.use((error, _request, response, _next) => {

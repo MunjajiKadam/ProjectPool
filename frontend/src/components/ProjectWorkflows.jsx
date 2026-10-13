@@ -132,11 +132,13 @@ export function ProjectSubmissionDialog({ onClose, onSubmitted, admin = false, p
 
 export function ManagementDialog({ mode, onClose, onChanged, onEdit, asPage = false }) {
   const [projects, setProjects] = useState([])
+  const [corrections, setCorrections] = useState([])
   const [message, setMessage] = useState('')
   const [busyId, setBusyId] = useState('')
   const [selectedIds, setSelectedIds] = useState([])
   const [analytics, setAnalytics] = useState(null)
-  const title = mode === 'moderation' ? 'Review submissions' : mode === 'admin' ? 'Catalog management' : 'Your submissions'
+  const [adminSection, setAdminSection] = useState('catalog')
+  const title = mode === 'moderation' ? 'Review submissions' : mode === 'admin' ? adminSection === 'corrections' ? 'Correction reports' : 'Catalog management' : 'Your submissions'
   const endpoint = mode === 'moderation' ? '/projects/moderation' : mode === 'admin' ? '/projects/admin/all' : '/projects/mine'
 
   async function load() {
@@ -151,6 +153,13 @@ export function ManagementDialog({ mode, onClose, onChanged, onEdit, asPage = fa
 
   useEffect(() => {
     if (mode === 'admin') api('/projects/analytics').then(setAnalytics).catch(() => {})
+  }, [mode])
+
+  useEffect(() => {
+    if (mode !== 'admin') return undefined
+    let active = true
+    api('/projects/corrections').then((result) => { if (active) setCorrections(result.items || []) }).catch((error) => { if (active) setMessage(error.message) })
+    return () => { active = false }
   }, [mode])
 
   async function bulkReview(decision) {
@@ -179,8 +188,26 @@ export function ManagementDialog({ mode, onClose, onChanged, onEdit, asPage = fa
     finally { setBusyId('') }
   }
 
+
+  async function reviewCorrection(report, status) {
+    setBusyId(report._id)
+    setMessage('')
+    try {
+      const result = await api(`/projects/corrections/${report._id}`, { method: 'PATCH', body: { status } })
+      setCorrections((current) => current.map((item) => item._id === report._id ? result.report : item))
+    } catch (error) { setMessage(error.message) }
+    finally { setBusyId('') }
+  }
   return <DialogFrame title={title} onClose={onClose} wide asPage={asPage}>
-    <div className="management-list">
+    {mode === 'admin' && <nav className="management-sections" aria-label="Catalog management sections"><button type="button" aria-pressed={adminSection === 'catalog'} onClick={() => setAdminSection('catalog')}>Catalog</button><button type="button" aria-pressed={adminSection === 'corrections'} onClick={() => setAdminSection('corrections')}>Corrections <span>{corrections.filter((item) => item.status === 'pending').length}</span></button></nav>}
+    {mode === 'admin' && adminSection === 'corrections' ? <div className="management-list correction-report-list">
+      {message && <p className="workflow-error" role="alert">{message}</p>}
+      {!corrections.length && !message && <p className="management-empty">No correction reports yet.</p>}
+      {corrections.map((report) => <article className="management-row" key={report._id}>
+        <div className="management-copy"><div className="management-row-title"><h3><Link to={`/projects/${encodeURIComponent(report.projectId)}`}>{report.projectTitle}</Link></h3><span className={`status-label status-${report.status}`}>{report.status}</span></div><p>{report.message}</p><small>{report.contactEmail || 'No reply address'} · {new Date(report.createdAt).toLocaleDateString()}</small></div>
+        <div className="management-actions">{report.status !== 'resolved' && <Button variant="outline" disabled={busyId === report._id} onClick={() => reviewCorrection(report, 'resolved')}>Resolve</Button>}{report.status !== 'dismissed' && <Button variant="outline" disabled={busyId === report._id} onClick={() => reviewCorrection(report, 'dismissed')}>Dismiss</Button>}{report.status !== 'pending' && <Button variant="ghost" disabled={busyId === report._id} onClick={() => reviewCorrection(report, 'pending')}>Reopen</Button>}</div>
+      </article>)}
+    </div> : <div className="management-list">
       {message && <p className="workflow-error" role="alert">{message}</p>}
       {mode === 'moderation' && projects.length > 0 && <div className="bulk-review-toolbar"><label><input type="checkbox" checked={selectedIds.length === projects.length} onChange={(event) => setSelectedIds(event.target.checked ? projects.map((project) => project.id || project._id) : [])} /> Select all <span>{selectedIds.length} selected</span></label><div><Button variant="outline" disabled={!selectedIds.length || busyId === 'bulk'} onClick={() => bulkReview('approved')}><Check size={14} /> Approve selected</Button><Button variant="outline" disabled={!selectedIds.length || busyId === 'bulk'} onClick={() => bulkReview('rejected')}>Reject selected</Button></div></div>}
       {!projects.length && !message && <p className="management-empty">Nothing to review yet.</p>}
@@ -194,8 +221,8 @@ export function ManagementDialog({ mode, onClose, onChanged, onEdit, asPage = fa
           {busyId === (project.id || project._id) && <LoaderCircle className="spin-icon" size={16} />}
         </div>
       </article>)}
-    </div>
-    {mode === 'admin' && <>{analytics && <div className="submission-analytics"><div className="submission-analytics-heading"><span>SUBMISSION HEALTH</span><strong>{analytics.submissions.pending + analytics.submissions.approved + analytics.submissions.rejected} total</strong></div><div className="submission-ratio"><i className="ratio-approved" style={{ flex: Math.max(analytics.submissions.approved, 0.1) }} /><i className="ratio-pending" style={{ flex: Math.max(analytics.submissions.pending, 0.1) }} /><i className="ratio-rejected" style={{ flex: Math.max(analytics.submissions.rejected, 0.1) }} /></div><div className="submission-ratio-labels"><span>Approved {analytics.submissions.approved}</span><span>Pending {analytics.submissions.pending}</span><span>Rejected {analytics.submissions.rejected}</span></div></div>}<div className="management-footer"><span><ShieldCheck size={15} /> Catalog administrator</span><Button onClick={() => onEdit(null, true)}>Add project idea</Button></div></>}
+    </div>}
+    {mode === 'admin' && adminSection === 'catalog' && <>{analytics && <div className="submission-analytics"><div className="submission-analytics-heading"><span>SUBMISSION HEALTH</span><strong>{analytics.submissions.pending + analytics.submissions.approved + analytics.submissions.rejected} total</strong></div><div className="submission-ratio"><i className="ratio-approved" style={{ flex: Math.max(analytics.submissions.approved, 0.1) }} /><i className="ratio-pending" style={{ flex: Math.max(analytics.submissions.pending, 0.1) }} /><i className="ratio-rejected" style={{ flex: Math.max(analytics.submissions.rejected, 0.1) }} /></div><div className="submission-ratio-labels"><span>Approved {analytics.submissions.approved}</span><span>Pending {analytics.submissions.pending}</span><span>Rejected {analytics.submissions.rejected}</span></div></div>}<div className="management-footer"><span><ShieldCheck size={15} /> Catalog administrator</span><Button onClick={() => onEdit(null, true)}>Add project idea</Button></div></>}
   </DialogFrame>
 }
 

@@ -11,6 +11,10 @@ The repository contains a React web client and an Express API backed by MongoDB.
 - Explore trending ideas and recommendations, or choose a surprise project from the current results.
 - Open a full project brief with scope, features, suggested technology, team size, estimated cost, prerequisites, learning outcomes, milestones, and deliverables.
 - Ask common questions about a project using the local project Q&A guide. It matches questions to information in the brief and does not call an AI provider yet.
+- Organize approved ideas into named collections such as “Semester Project” and “Learning Projects,” then share a public link or return the collection to private.
+- Track milestone progress per project. Signed-in progress syncs to the account; guest progress stays in the current browser.
+- Review the last eight projects opened in this browser, or compare up to three projects across timelines, difficulty, tools, skills, costs, and deliverables.
+- Suggest corrections to project information. Administrators can review, resolve, dismiss, or reopen submitted reports.
 - Save and share project links, and download a project brief as a PDF.
 - Keep guest saves in the current browser, or sign in to sync saved ideas and activity to the account.
 - Submit project ideas for review, track their status, and edit pending or rejected submissions.
@@ -25,6 +29,9 @@ The repository contains a React web client and an Express API backed by MongoDB.
 | `/` | Discover, search, and filter the project catalog. |
 | `/projects/:id` | Shareable project details, related ideas, and project brief actions. |
 | `/saved` | View saved projects. Requires sign-in. |
+| `/recent` | View the last eight projects opened in this browser. |
+| `/collections` | Create, organize, and share project collections. Requires sign-in. |
+| `/collections/shared/:shareId` | View a public collection shared by its owner. |
 | `/submissions` | View and update your submissions. Requires sign-in. |
 | `/profile` | Manage profile appearance and interests, view recommendations and activity. Requires sign-in. |
 | `/account` | Update display name or password, or delete the account. Requires sign-in. |
@@ -166,6 +173,21 @@ All user routes below require sign-in.
 | `POST` | `/api/users/saved/:projectId` | Save an approved project. |
 | `DELETE` | `/api/users/saved/:projectId` | Remove a saved project. |
 | `GET` | `/api/users/activity` | Read recent saves and submissions. |
+
+### Collections, project progress, and corrections
+
+Collection management routes require sign-in. Collections are private by default; changing visibility creates a share link, and changing back to private revokes it. Public collection pages only include currently approved projects.
+
+| Method | Endpoint | Access | Purpose |
+| --- | --- | --- | --- |
+| `GET`, `POST` | `/api/collections` | Signed-in user | List or create your collections. |
+| `PATCH`, `DELETE` | `/api/collections/:collectionId` | Collection owner | Edit name, description, or visibility; delete a collection. |
+| `POST`, `DELETE` | `/api/collections/:collectionId/projects/:projectId` | Collection owner | Add or remove an approved project. |
+| `GET` | `/api/collections/shared/:shareId` | Public | Read a collection through its active share link. |
+| `GET`, `PUT` | `/api/projects/:id/progress` | Signed-in user | Read or update completed milestone indexes. |
+| `POST` | `/api/projects/:id/corrections` | Public | Submit an outdated-information report. |
+| `GET` | `/api/projects/corrections` | Administrator | Review correction reports. |
+| `PATCH` | `/api/projects/corrections/:reportId` | Administrator | Resolve, dismiss, or reopen a report. |
 
 ## Demo data and administrator account
 

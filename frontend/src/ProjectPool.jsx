@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
-import { ArrowDownLeft, ArrowDownRight, ArrowRight, Bookmark, Check, ChartNoAxesCombined, Clock3, Code2, Compass, Copy, Cpu, GraduationCap, Layers3, Lightbulb, LockKeyhole, LogIn, LogOut, Menu, Moon, Plus, Search, ShieldCheck, Shuffle, Sparkles, Sun, UserRound, X } from 'lucide-react'
+import { ArrowDownLeft, ArrowDownRight, ArrowRight, Bookmark, Check, ChartNoAxesCombined, Clock3, Code2, Compass, Copy, Cpu, FolderHeart, GitCompareArrows, GraduationCap, History, Layers3, Lightbulb, LockKeyhole, LogIn, LogOut, Menu, Moon, Plus, Search, ShieldCheck, Shuffle, Sparkles, Sun, UserRound, X } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { projects as starterProjects } from '@/data/projects'
 import { api } from '@/lib/api'
 import { projectBrief } from '@/lib/projectBrief'
 import { AccountDialog, AuthDialog, ManagementDialog, ProjectSubmissionDialog } from '@/components/ProjectWorkflows'
+import { ProjectCollectionsPage, ProjectCollectionPicker, SharedCollectionPage } from '@/components/ProjectCollections'
+import { ProjectCorrectionForm, ProjectProgressChecklist } from '@/components/ProjectSideTools'
 import { ProjectQuestionPanel } from '@/components/ProjectQuestionPanel'
 import { ProfilePage } from '@/components/ProfilePage'
 import { AboutPage, DashboardPage } from '@/components/PresentationPages'
@@ -34,12 +36,17 @@ function readSavedProjects() {
   catch { return [] }
 }
 
+function readRecentProjects() {
+  try { return JSON.parse(localStorage.getItem('projectpool-recent') || '[]') }
+  catch { return [] }
+}
+
 function ProjectImage({ src, alt, className }) {
   const [useFallback, setUseFallback] = useState(false)
   return <img className={className} src={useFallback || !src ? '/project-fallback.svg' : src} alt={alt || ''} loading="lazy" onError={() => setUseFallback(true)} />
 }
 
-function ProjectCard({ project, saved, onSave, onOpen, showStatus = false, index = 0 }) {
+function ProjectCard({ project, saved, onSave, onOpen, onCompare, isCompared, showStatus = false, index = 0 }) {
   const brief = projectBrief(project)
   return (
     <article className="project-card reveal-on-scroll" style={{ transitionDelay: `${Math.min(index % 6, 5) * 55}ms` }}>
@@ -55,6 +62,7 @@ function ProjectCard({ project, saved, onSave, onOpen, showStatus = false, index
         <div className="project-card-skills" aria-label="Skills developed">{brief.skills.slice(0, 3).map((skill) => <span key={skill}>{skill}</span>)}</div>
         <div className="project-card-footer">
           <div className="tech-list">{project.technology.slice(0, 3).map((tech) => <span key={tech}>{tech}</span>)}</div>
+          {(!project.status || project.status === 'approved') && <Button variant="ghost" size="icon" className={`compare-project-button ${isCompared ? 'is-compared' : ''}`} onClick={onCompare} aria-label={isCompared ? `Remove ${project.title} from comparison` : `Add ${project.title} to comparison`} title={isCompared ? 'Remove from comparison' : 'Compare project'}><GitCompareArrows size={16} /></Button>}
           {(!project.status || project.status === 'approved') && <Button variant="ghost" size="icon" className={`save-button ${saved ? 'is-saved' : ''}`} onClick={onSave} aria-label={saved ? `Remove ${project.title} from saved projects` : `Save ${project.title}`} title={saved ? 'Remove saved project' : 'Save project'}><Bookmark size={17} fill={saved ? 'currentColor' : 'none'} /></Button>}
         </div>
       </div>
@@ -62,7 +70,7 @@ function ProjectCard({ project, saved, onSave, onOpen, showStatus = false, index
   )
 }
 
-function ProjectDialog({ project, saved, onSave, onShare, onClose, page = false }) {
+function ProjectDialog({ project, saved, user, onSave, onShare, onClose, page = false }) {
   const dialogRef = useDialogFocus(onClose, !page)
   const navigate = useNavigate()
   const [similar, setSimilar] = useState([])
@@ -106,9 +114,12 @@ function ProjectDialog({ project, saved, onSave, onShare, onClose, page = false 
           <div className="detail-section"><h3>Starting point</h3><ul className="deliverable-list">{brief.prerequisites.map((item) => <li key={item}>{item}</li>)}</ul></div>
           <div className="detail-section"><h3>What you’ll learn</h3><ul className="deliverable-list">{brief.learningOutcomes.map((item) => <li key={item}>{item}</li>)}</ul></div>
           <div className="detail-section"><h3>Suggested milestones</h3><ol className="project-milestones">{brief.milestones.map((milestone, index) => <li key={milestone}><span>{String(index + 1).padStart(2, '0')}</span>{milestone}</li>)}</ol></div>
+          {(!project.status || project.status === 'approved') && <ProjectProgressChecklist project={project} user={user} />}
           <div className="detail-section"><h3>Suggested toolkit</h3><div className="detail-tech-list">{project.technology.map((tech) => <span key={tech}>{tech}</span>)}</div></div>
           <div className="detail-section"><h3>Final deliverables</h3><ul className="deliverable-list">{project.deliverables.map((item) => <li key={item}>{item}</li>)}</ul></div>
+          {user && (!project.status || project.status === 'approved') && <ProjectCollectionPicker project={project} />}
           {(!project.status || project.status === 'approved') && <ProjectQuestionPanel project={project} />}
+          {(!project.status || project.status === 'approved') && <ProjectCorrectionForm project={project} />}
           {(!project.status || project.status === 'approved') ? <div className="dialog-actions"><Button className="dialog-save" variant={saved ? 'outline' : 'default'} onClick={onSave}><Bookmark size={16} fill={saved ? 'currentColor' : 'none'} />{saved ? 'Saved to your ideas' : 'Save this idea'}</Button><Button className="dialog-share" variant="outline" onClick={onShare} aria-label="Copy link to this project" title="Copy project link"><Copy size={16} /></Button><Button className="dialog-share pdf-button" variant="outline" onClick={downloadBrief} aria-label="Download project brief PDF" title="Download project brief"><ArrowDownRight size={16} /></Button></div> : <p className="submission-dialog-status">This submission is {project.status} and is not yet available to save.</p>}
         </div>
       </section>
@@ -117,16 +128,42 @@ function ProjectDialog({ project, saved, onSave, onShare, onClose, page = false 
   )
 }
 
+function ProjectCompareDialog({ projects, onClose, onRemove }) {
+  const dialogRef = useDialogFocus(onClose)
+  const rows = [
+    ['Category', (project) => project.category],
+    ['Difficulty', (project) => project.difficulty],
+    ['Timeline', (project) => project.duration],
+    ['Team size', (project) => project.teamSize || 'Not specified'],
+    ['Estimated cost', (project) => project.estimatedCost || 'Not specified'],
+    ['Skills', (project) => (project.skills || []).join(', ') || 'Not specified'],
+    ['Technology', (project) => (project.technology || []).join(', ') || 'Not specified'],
+    ['Deliverables', (project) => (project.deliverables || []).join(', ') || 'Not specified'],
+  ]
+  return <div className="compare-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+    <section ref={dialogRef} tabIndex="-1" className="compare-dialog" role="dialog" aria-modal="true" aria-labelledby="compare-title">
+      <header><div><span className="section-kicker">MAKE YOUR PICK</span><h2 id="compare-title">Compare project ideas</h2></div><Button variant="ghost" size="icon" aria-label="Close comparison" onClick={onClose}><X size={18} /></Button></header>
+      <div className="compare-table-scroll"><table><thead><tr><th scope="col">Project details</th>{projects.map((project) => <th scope="col" key={project.id || project._id}><div><strong>{project.title}</strong><Button variant="ghost" size="icon" aria-label={`Remove ${project.title} from comparison`} onClick={() => onRemove(project)}><X size={14} /></Button></div></th>)}</tr></thead><tbody>{rows.map(([label, value]) => <tr key={label}><th scope="row">{label}</th>{projects.map((project) => <td key={project.id || project._id}>{value(project)}</td>)}</tr>)}</tbody></table></div>
+      <footer><span>{projects.length} of 3 projects selected</span><Button onClick={onClose}>Done</Button></footer>
+    </section>
+  </div>
+}
+
 function App() {
   const location = useLocation()
   const navigate = useNavigate()
   const pathname = location.pathname
   const isProjectPage = pathname.startsWith('/projects/')
+  const isSharedCollectionPage = pathname.startsWith('/collections/shared/')
+  const shareId = isSharedCollectionPage ? decodeURIComponent(pathname.slice('/collections/shared/'.length)) : ''
   const isAuthPage = pathname === '/login' || pathname === '/register'
   const activeView = pathname === '/' ? 'discover' : pathname === '/saved' ? 'saved' : pathname === '/submissions' ? 'mine' : 'page'
   const projectRouteId = isProjectPage ? decodeURIComponent(pathname.slice('/projects/'.length)) : ''
   const [projects, setProjects] = useState(starterProjects)
   const [savedProjects, setSavedProjects] = useState(readSavedProjects)
+  const [recentProjects, setRecentProjects] = useState(readRecentProjects)
+  const [compareProjects, setCompareProjects] = useState([])
+  const [compareOpen, setCompareOpen] = useState(false)
   const [category, setCategory] = useState('All projects')
   const [difficulty, setDifficulty] = useState('all')
   const [tag, setTag] = useState('')
@@ -160,6 +197,16 @@ function App() {
   const suggestions = [...new Set(projects.flatMap((project) => [project.title, ...(project.technology || [])]))].slice(0, 24)
 
   useEffect(() => { window.scrollTo(0, 0) }, [pathname])
+
+  function recordRecentProject(project) {
+    const projectId = project.id || project._id
+    setRecentProjects((current) => {
+      if (current[0] && (current[0].id || current[0]._id) === projectId) return current
+      const next = [project, ...current.filter((item) => (item.id || item._id) !== projectId)].slice(0, 8)
+      localStorage.setItem('projectpool-recent', JSON.stringify(next))
+      return next
+    })
+  }
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -219,7 +266,7 @@ function App() {
   }, [refreshKey, user])
 
   useEffect(() => {
-    const protectedPage = ['/saved', '/submissions', '/profile', '/submit', '/account', '/manage'].includes(pathname)
+    const protectedPage = ['/saved', '/submissions', '/profile', '/submit', '/account', '/manage', '/collections'].includes(pathname)
     if (authChecked && protectedPage && !user) navigate('/login', { replace: true, state: { from: pathname } })
     if (authChecked && pathname === '/manage' && user && !['admin', 'moderator'].includes(user.role)) navigate('/', { replace: true })
   }, [authChecked, navigate, pathname, user])
@@ -236,10 +283,10 @@ function App() {
     async function restoreProjectFromUrl() {
       if (!projectRouteId) { setSelectedProject(null); return }
       const knownProject = [...projects, ...savedRecords, ...myProjects].find((item) => (item.id || item._id) === projectRouteId)
-      if (knownProject) { setSelectedProject(knownProject); return }
+      if (knownProject) { setSelectedProject(knownProject); recordRecentProject(knownProject); return }
       try {
         const project = await api(`/projects/${encodeURIComponent(projectRouteId)}`)
-        if (active) setSelectedProject(project)
+        if (active) { setSelectedProject(project); recordRecentProject(project) }
       } catch {
         if (active) { setToast('That project link is unavailable.'); setSelectedProject(null) }
       }
@@ -277,8 +324,8 @@ function App() {
   }
 
   function selectView(view) {
-    if ((view === 'mine' || view === 'saved') && !user) { navigate('/login', { state: { from: view === 'mine' ? '/submissions' : '/saved' } }); return }
-    const routes = { discover: '/', saved: '/saved', mine: '/submissions' }
+    if ((view === 'mine' || view === 'saved' || view === 'collections') && !user) { navigate('/login', { state: { from: view === 'mine' ? '/submissions' : view === 'collections' ? '/collections' : '/saved' } }); return }
+    const routes = { discover: '/', saved: '/saved', mine: '/submissions', collections: '/collections' }
     navigate(routes[view])
     setCategory('All projects'); setDifficulty('all'); setPage(1)
   }
@@ -314,6 +361,17 @@ function App() {
     const projectId = project.id || project._id
     navigate(`/projects/${encodeURIComponent(projectId)}`)
     setSelectedProject(project)
+    recordRecentProject(project)
+  }
+
+  function toggleComparison(project) {
+    const projectId = project.id || project._id
+    if (compareProjects.some((item) => (item.id || item._id) === projectId)) {
+      setCompareProjects((current) => current.filter((item) => (item.id || item._id) !== projectId))
+      return
+    }
+    if (compareProjects.length >= 3) { setToast('Compare up to three projects at a time.'); return }
+    setCompareProjects((current) => [...current, project])
   }
 
   function closeProject() { navigate('/') }
@@ -340,6 +398,8 @@ function App() {
         <nav className="primary-nav" aria-label="Main navigation">
           <button className={`nav-item ${activeView === 'discover' ? 'active' : ''}`} onClick={() => selectView('discover')}><Compass size={17} /><span>Discover ideas</span></button>
           <button className={`nav-item ${activeView === 'saved' ? 'active' : ''}`} onClick={() => selectView('saved')}><Bookmark size={17} /><span>Saved ideas</span><span className="nav-count">{savedProjects.length}</span></button>
+          <Link className={`nav-item ${pathname === '/recent' ? 'active' : ''}`} to="/recent"><History size={17} /><span>Recently viewed</span><span className="nav-count">{recentProjects.length}</span></Link>
+          {user && <button className={`nav-item ${pathname === '/collections' ? 'active' : ''}`} onClick={() => selectView('collections')}><FolderHeart size={17} /><span>My collections</span></button>}
           {user && <button className={`nav-item ${activeView === 'mine' ? 'active' : ''}`} onClick={() => selectView('mine')}><Lightbulb size={16} /><span>My submissions</span><span className="nav-count">{myProjects.length}</span></button>}
           <Link className={`nav-item ${pathname === '/dashboard' ? 'active' : ''}`} to="/dashboard"><ChartNoAxesCombined size={17} /><span>Analytics</span></Link>
           <Link className={`nav-item ${pathname === '/about' ? 'active' : ''}`} to="/about"><Layers3 size={17} /><span>About ProjectPool</span></Link>
@@ -352,7 +412,7 @@ function App() {
       </aside>
 
       <main id="top" className="main-content">
-        <header className="topbar"><div className="breadcrumb"><span>Library</span><span className="breadcrumb-slash">/</span><strong>{isProjectPage ? 'Project details' : isAuthPage ? pathname === '/register' ? 'Create account' : 'Sign in' : pathname === '/profile' ? 'Profile' : pathname === '/account' ? 'Account settings' : pathname === '/submit' ? 'Submit idea' : pathname === '/manage' ? 'Manage projects' : pathname === '/dashboard' ? 'Analytics' : pathname === '/about' ? 'About' : activeView === 'saved' ? 'Saved ideas' : activeView === 'mine' ? 'My submissions' : 'Explore'}</strong></div><div className="topbar-right topbar-actions">
+        <header className="topbar"><div className="breadcrumb"><span>Library</span><span className="breadcrumb-slash">/</span><strong>{isProjectPage ? 'Project details' : isSharedCollectionPage ? 'Shared collection' : isAuthPage ? pathname === '/register' ? 'Create account' : 'Sign in' : pathname === '/collections' ? 'My collections' : pathname === '/recent' ? 'Recently viewed' : pathname === '/profile' ? 'Profile' : pathname === '/account' ? 'Account settings' : pathname === '/submit' ? 'Submit idea' : pathname === '/manage' ? 'Manage projects' : pathname === '/dashboard' ? 'Analytics' : pathname === '/about' ? 'About' : activeView === 'saved' ? 'Saved ideas' : activeView === 'mine' ? 'My submissions' : 'Explore'}</strong></div><div className="topbar-right topbar-actions">
           <Button variant="ghost" size="icon" title={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`} onClick={() => setTheme((current) => current === 'light' ? 'dark' : 'light')}>{theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}</Button>
           {user ? <><Button variant="ghost" className="account-button" onClick={() => navigate('/profile')}><UserRound size={15} /><span>{user.name}</span></Button><Button variant="ghost" size="icon" title="Sign out" aria-label="Sign out" onClick={signOut}><LogOut size={16} /></Button></> : <Button variant="outline" className="account-button" onClick={() => navigate('/login')}><LogIn size={15} /> Sign in</Button>}
           {user && <Button className="topbar-action" onClick={() => navigate('/submit')}><Plus size={15} /> Submit idea</Button>}
@@ -390,22 +450,27 @@ function App() {
           </div>
           {loadError && <div className="inline-error" role="status"><span>{loadError} {projects.length ? 'Showing available starter ideas.' : ''}</span><Button variant="outline" onClick={() => setRefreshKey((current) => current + 1)}>Retry</Button></div>}
           <div className="tag-filter-row" aria-label="Filter by tags">{availableTags.map((value) => <button key={value} type="button" className={`tag-chip ${tag === value ? 'selected' : ''}`} onClick={() => { setTag(tag === value ? '' : value); setPage(1) }}>{value}</button>)}</div>
-          {loadingCatalog && (!loadedRequest || !visibleProjects.length) ? <div className="project-grid skeleton-grid" aria-live="polite">{Array.from({ length: 6 }, (_, index) => <div className="project-skeleton" key={index}><span /><div><i /><i /><i /></div></div>)}</div> : visibleProjects.length ? <div className="project-grid" aria-busy={loadingCatalog}>{visibleProjects.map((project, index) => { const projectId = project.id || project._id; return <ProjectCard key={projectId} project={project} saved={savedProjects.includes(projectId)} showStatus={activeView === 'mine'} onSave={() => toggleSaved(project)} onOpen={() => openProject(project)} index={index} /> })}</div> : <div className="empty-state"><div className="empty-icon"><Search size={21} /></div><h3>{activeView === 'mine' ? 'No submissions yet' : 'No ideas found'}</h3><p>{activeView === 'mine' ? 'Submit an idea and follow its review status here.' : 'Try another search or choose a different field.'}</p>{activeView === 'mine' ? <Button onClick={() => navigate('/submit')}><Plus size={15} /> Submit an idea</Button> : <Button variant="outline" onClick={() => { setQuery(''); setCategory('All projects'); setDifficulty('all'); setTag(''); navigate('/'); setPage(1) }}>Clear filters</Button>}</div>}
+          {loadingCatalog && (!loadedRequest || !visibleProjects.length) ? <div className="project-grid skeleton-grid" aria-live="polite">{Array.from({ length: 6 }, (_, index) => <div className="project-skeleton" key={index}><span /><div><i /><i /><i /></div></div>)}</div> : visibleProjects.length ? <div className="project-grid" aria-busy={loadingCatalog}>{visibleProjects.map((project, index) => { const projectId = project.id || project._id; return <ProjectCard key={projectId} project={project} saved={savedProjects.includes(projectId)} isCompared={compareProjects.some((item) => (item.id || item._id) === projectId)} onCompare={() => toggleComparison(project)} showStatus={activeView === 'mine'} onSave={() => toggleSaved(project)} onOpen={() => openProject(project)} index={index} /> })}</div> : <div className="empty-state"><div className="empty-icon"><Search size={21} /></div><h3>{activeView === 'mine' ? 'No submissions yet' : 'No ideas found'}</h3><p>{activeView === 'mine' ? 'Submit an idea and follow its review status here.' : 'Try another search or choose a different field.'}</p>{activeView === 'mine' ? <Button onClick={() => navigate('/submit')}><Plus size={15} /> Submit an idea</Button> : <Button variant="outline" onClick={() => { setQuery(''); setCategory('All projects'); setDifficulty('all'); setTag(''); navigate('/'); setPage(1) }}>Clear filters</Button>}</div>}
           {activeView === 'discover' && pageCount > 1 && <nav className="pagination" aria-label="Project pages"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>Previous</Button><span>Page {page} of {pageCount}</span><Button variant="outline" disabled={page >= pageCount} onClick={() => setPage((current) => current + 1)}>Next</Button></nav>}
           <div className="collection-end"><span>YOU’RE ALL CAUGHT UP</span><span className="end-line" /><Sparkles size={15} /></div>
         </section>}
+        {pathname === '/recent' && <section className="collection-section recent-projects-page"><div className="section-heading"><div><span className="section-kicker">PICK UP WHERE YOU LEFT OFF</span><h2>Recently viewed projects</h2><p className="section-subtitle">Your last eight project pages, saved in this browser.</p></div><Button variant="ghost" onClick={() => { setRecentProjects([]); localStorage.removeItem('projectpool-recent') }} disabled={!recentProjects.length}>Clear history</Button></div>{recentProjects.length ? <div className="project-grid">{recentProjects.map((project, index) => { const projectId = project.id || project._id; return <ProjectCard key={projectId} project={project} saved={savedProjects.includes(projectId)} isCompared={compareProjects.some((item) => (item.id || item._id) === projectId)} onSave={() => toggleSaved(project)} onOpen={() => openProject(project)} onCompare={() => toggleComparison(project)} index={index} /> })}</div> : <div className="empty-state"><div className="empty-icon"><History size={21} /></div><h3>No recent projects yet</h3><p>Open a project to see it here.</p><Button variant="outline" onClick={() => navigate('/')}>Discover ideas</Button></div>}</section>}
         {activeView === 'discover' && <footer className="page-footer"><span>PROJECTPOOL · BUILT FOR WHAT’S NEXT</span><button type="button" onClick={() => user ? navigate('/submit') : navigate('/login')}>Share an idea <ArrowRight size={13} /></button></footer>}
         {pathname === '/dashboard' && <DashboardPage />}
         {pathname === '/about' && <AboutPage />}
         {pathname === '/profile' && user && <ProfilePage user={user} savedCount={savedProjects.length} submissionCount={myProjects.length} onAccount={() => navigate('/account')} onUpdated={setUser} />}
-      {isProjectPage && selectedProject && <ProjectDialog page project={selectedProject} saved={savedProjects.includes(selectedProject.id || selectedProject._id)} onSave={() => toggleSaved(selectedProject)} onShare={() => shareProject(selectedProject)} onClose={closeProject} />}
+        {pathname === '/collections' && user && <ProjectCollectionsPage />}
+        {isSharedCollectionPage && <SharedCollectionPage shareId={shareId} />}
+      {isProjectPage && selectedProject && <ProjectDialog page project={selectedProject} saved={savedProjects.includes(selectedProject.id || selectedProject._id)} user={user} onSave={() => toggleSaved(selectedProject)} onShare={() => shareProject(selectedProject)} onClose={closeProject} />}
       {isProjectPage && !selectedProject && <section className="standalone-page-message" aria-live="polite">Loading project details...</section>}
       {isAuthPage && <AuthDialog initialMode={pathname === '/register' ? 'register' : 'login'} theme={theme} onThemeToggle={() => setTheme((current) => current === 'light' ? 'dark' : 'light')} onModeChange={(mode) => navigate(mode === 'register' ? '/register' : '/login', { replace: true, state: location.state })} onClose={() => navigate(location.state?.from || '/')} onAuthenticated={handleAuthenticated} />}
       {pathname === '/account' && user && <AccountDialog asPage user={user} onClose={() => navigate('/profile')} onUpdated={setUser} onDeleted={() => { setUser(null); setSavedProjects([]); setSavedRecords([]); navigate('/') }} />}
       {pathname === '/submit' && user && <ProjectSubmissionDialog asPage admin={user.role === 'admin'} project={location.state?.project || null} onClose={() => navigate(location.state?.returnTo || '/')} onSubmitted={changed} />}
       {pathname === '/manage' && user && <ManagementDialog asPage mode={user.role === 'admin' ? 'admin' : 'moderation'} onClose={() => navigate('/')} onChanged={changed} onEdit={(project, admin) => navigate('/submit', { state: { project, admin, returnTo: '/manage' } })} />}
-      {!isProjectPage && !isAuthPage && !['/', '/saved', '/submissions', '/profile', '/account', '/submit', '/manage', '/dashboard', '/about'].includes(pathname) && <section className="standalone-page-message"><h2>Page not found</h2><p>This ProjectPool page does not exist.</p><Button onClick={() => navigate('/')}>Back to ideas</Button></section>}
+      {!isProjectPage && !isAuthPage && !isSharedCollectionPage && !['/', '/saved', '/submissions', '/recent', '/collections', '/profile', '/account', '/submit', '/manage', '/dashboard', '/about'].includes(pathname) && <section className="standalone-page-message"><h2>Page not found</h2><p>This ProjectPool page does not exist.</p><Button onClick={() => navigate('/')}>Back to ideas</Button></section>}
       </main>
+      {compareProjects.length > 0 && <div className="compare-tray"><span><GitCompareArrows size={16} /> {compareProjects.length} selected</span><Button onClick={() => setCompareOpen(true)} disabled={compareProjects.length < 2}>Compare</Button><Button variant="ghost" onClick={() => setCompareProjects([])}>Clear</Button></div>}
+      {compareOpen && <ProjectCompareDialog projects={compareProjects} onClose={() => setCompareOpen(false)} onRemove={toggleComparison} />}
       {toast && <div className="showcase-toast" role="status" aria-live="polite"><span>{toast}</span><button type="button" aria-label="Dismiss notification" onClick={() => setToast('')}><X size={15} /></button></div>}
     </div>
   )
