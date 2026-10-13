@@ -6,6 +6,7 @@ import { projects as starterProjects } from '@/data/projects'
 import { api } from '@/lib/api'
 import { projectBrief } from '@/lib/projectBrief'
 import { AccountDialog, AuthDialog, ManagementDialog, ProjectSubmissionDialog } from '@/components/ProjectWorkflows'
+import { ProjectQuestionPanel } from '@/components/ProjectQuestionPanel'
 import { ProfilePage } from '@/components/ProfilePage'
 import { AboutPage, DashboardPage } from '@/components/PresentationPages'
 import { useDialogFocus } from '@/hooks/useDialogFocus'
@@ -107,6 +108,7 @@ function ProjectDialog({ project, saved, onSave, onShare, onClose, page = false 
           <div className="detail-section"><h3>Suggested milestones</h3><ol className="project-milestones">{brief.milestones.map((milestone, index) => <li key={milestone}><span>{String(index + 1).padStart(2, '0')}</span>{milestone}</li>)}</ol></div>
           <div className="detail-section"><h3>Suggested toolkit</h3><div className="detail-tech-list">{project.technology.map((tech) => <span key={tech}>{tech}</span>)}</div></div>
           <div className="detail-section"><h3>Final deliverables</h3><ul className="deliverable-list">{project.deliverables.map((item) => <li key={item}>{item}</li>)}</ul></div>
+          {(!project.status || project.status === 'approved') && <ProjectQuestionPanel project={project} />}
           {(!project.status || project.status === 'approved') ? <div className="dialog-actions"><Button className="dialog-save" variant={saved ? 'outline' : 'default'} onClick={onSave}><Bookmark size={16} fill={saved ? 'currentColor' : 'none'} />{saved ? 'Saved to your ideas' : 'Save this idea'}</Button><Button className="dialog-share" variant="outline" onClick={onShare} aria-label="Copy link to this project" title="Copy project link"><Copy size={16} /></Button><Button className="dialog-share pdf-button" variant="outline" onClick={downloadBrief} aria-label="Download project brief PDF" title="Download project brief"><ArrowDownRight size={16} /></Button></div> : <p className="submission-dialog-status">This submission is {project.status} and is not yet available to save.</p>}
         </div>
       </section>
