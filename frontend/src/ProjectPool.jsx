@@ -331,7 +331,7 @@ function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${isAuthPage ? 'app-shell-auth' : ''}`}>
       <aside className="sidebar">
         <div className="sidebar-brand-row"><Link className="brand" to="/" aria-label="ProjectPool home"><span className="brand-mark"><Lightbulb size={20} /></span><span>project<span>pool</span></span></Link><Button className="mobile-nav-toggle" variant="ghost" size="icon" onClick={() => setMobileCategoriesOpen((open) => !open)} aria-expanded={mobileCategoriesOpen} aria-controls="mobile-category-navigation" aria-label={mobileCategoriesOpen ? 'Close category navigation' : 'Open category navigation'} title={mobileCategoriesOpen ? 'Close categories' : 'Browse categories'}>{mobileCategoriesOpen ? <X size={18} /> : <Menu size={18} />}</Button></div>
         <div className="sidebar-label">WORKSPACE</div>
@@ -398,7 +398,7 @@ function App() {
         {pathname === '/profile' && user && <ProfilePage user={user} savedCount={savedProjects.length} submissionCount={myProjects.length} onAccount={() => navigate('/account')} onUpdated={setUser} />}
       {isProjectPage && selectedProject && <ProjectDialog page project={selectedProject} saved={savedProjects.includes(selectedProject.id || selectedProject._id)} onSave={() => toggleSaved(selectedProject)} onShare={() => shareProject(selectedProject)} onClose={closeProject} />}
       {isProjectPage && !selectedProject && <section className="standalone-page-message" aria-live="polite">Loading project details...</section>}
-      {isAuthPage && <AuthDialog asPage initialMode={pathname === '/register' ? 'register' : 'login'} onModeChange={(mode) => navigate(mode === 'register' ? '/register' : '/login', { replace: true, state: location.state })} onClose={() => navigate(location.state?.from || '/')} onAuthenticated={handleAuthenticated} />}
+      {isAuthPage && <AuthDialog initialMode={pathname === '/register' ? 'register' : 'login'} theme={theme} onThemeToggle={() => setTheme((current) => current === 'light' ? 'dark' : 'light')} onModeChange={(mode) => navigate(mode === 'register' ? '/register' : '/login', { replace: true, state: location.state })} onClose={() => navigate(location.state?.from || '/')} onAuthenticated={handleAuthenticated} />}
       {pathname === '/account' && user && <AccountDialog asPage user={user} onClose={() => navigate('/profile')} onUpdated={setUser} onDeleted={() => { setUser(null); setSavedProjects([]); setSavedRecords([]); navigate('/') }} />}
       {pathname === '/submit' && user && <ProjectSubmissionDialog asPage admin={user.role === 'admin'} project={location.state?.project || null} onClose={() => navigate(location.state?.returnTo || '/')} onSubmitted={changed} />}
       {pathname === '/manage' && user && <ManagementDialog asPage mode={user.role === 'admin' ? 'admin' : 'moderation'} onClose={() => navigate('/')} onChanged={changed} onEdit={(project, admin) => navigate('/submit', { state: { project, admin, returnTo: '/manage' } })} />}

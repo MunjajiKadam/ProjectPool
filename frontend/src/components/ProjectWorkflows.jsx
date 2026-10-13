@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Check, LoaderCircle, ShieldCheck, Trash2, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Eye, EyeOff, Lightbulb, LoaderCircle, Moon, ShieldCheck, Sun, Trash2, X } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api'
 import { useDialogFocus } from '@/hooks/useDialogFocus'
@@ -17,10 +18,11 @@ function DialogFrame({ title, children, onClose, wide = false, asPage = false })
   )
 }
 
-export function AuthDialog({ onClose, onAuthenticated, onModeChange, initialMode = 'login', asPage = false }) {
+export function AuthDialog({ onClose, onAuthenticated, onModeChange, initialMode = 'login', theme, onThemeToggle }) {
   const [mode, setMode] = useState(initialMode)
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   async function submit(event) {
     event.preventDefault()
@@ -36,16 +38,50 @@ export function AuthDialog({ onClose, onAuthenticated, onModeChange, initialMode
     finally { setBusy(false) }
   }
 
-  return <DialogFrame title={mode === 'login' ? 'Welcome back' : 'Create your account'} onClose={onClose} asPage={asPage}>
-    <form className="workflow-form" onSubmit={submit}>
-      {mode === 'register' && <label>Your name<input name="name" autoComplete="name" minLength="2" maxLength="80" required /></label>}
-      <label>Email address<input name="email" type="email" autoComplete="email" maxLength="254" required /></label>
-      <label>Password<input name="password" type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength="12" maxLength="128" required /><small>Use at least 12 characters.</small></label>
-      {message && <p className="workflow-error" role="alert">{message}</p>}
-      <Button type="submit" disabled={busy}>{busy && <LoaderCircle className="spin-icon" size={16} />}{mode === 'login' ? 'Sign in' : 'Create account'}</Button>
-      <button className="workflow-text-button" type="button" onClick={() => { const nextMode = mode === 'login' ? 'register' : 'login'; setMode(nextMode); setMessage(''); onModeChange?.(nextMode) }}>{mode === 'login' ? 'New to ProjectPool? Create an account' : 'Already have an account? Sign in'}</button>
-    </form>
-  </DialogFrame>
+  function changeMode() {
+    const nextMode = mode === 'login' ? 'register' : 'login'
+    setMode(nextMode)
+    setMessage('')
+    setShowPassword(false)
+    onModeChange?.(nextMode)
+  }
+
+  return <section className="auth-page" aria-labelledby="auth-heading">
+    <aside className="auth-story">
+      <img src="https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=1600&q=85" alt="College students sharing ideas around a table" />
+      <div className="auth-story-shade" />
+      <div className="auth-story-top">
+        <Link className="auth-brand" to="/" aria-label="ProjectPool home"><span><Lightbulb size={19} /></span>projectpool</Link>
+        <span className="auth-story-label">THE STUDENT PROJECT LIBRARY</span>
+      </div>
+      <div className="auth-story-copy">
+        <span className="auth-overline"><i /> IDEAS WORTH BUILDING</span>
+        <h1>Start with a spark.<br /><em>Build something real.</em></h1>
+        <p>Find a project that meets your curiosity, then turn it into a plan you can actually make.</p>
+      </div>
+      <div className="auth-story-footer"><span>01</span><div><strong>From first thought to final demo.</strong><small>A good place to begin is right here.</small></div></div>
+    </aside>
+    <div className="auth-panel">
+      <div className="auth-panel-top">
+        <Link className="auth-return" to="/"><ArrowLeft size={15} /> Browse ideas</Link>
+        <Button variant="ghost" size="icon" onClick={onThemeToggle} title={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}>{theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}</Button>
+      </div>
+      <div className="auth-form-wrap">
+        <span className="auth-form-kicker">{mode === 'login' ? 'YOUR NEXT IDEA IS WAITING' : 'A PLACE FOR WHAT’S NEXT'}</span>
+        <h2 id="auth-heading">{mode === 'login' ? 'Welcome back.' : 'Join ProjectPool.'}</h2>
+        <p className="auth-form-intro">{mode === 'login' ? 'Sign in to pick up where your ideas left off.' : 'Create an account to save ideas and share your own.'}</p>
+        <form className="auth-form" onSubmit={submit}>
+          {mode === 'register' && <div className="auth-field"><label htmlFor="auth-name">Your name</label><input id="auth-name" name="name" autoComplete="name" minLength="2" maxLength="80" required /></div>}
+          <div className="auth-field"><label htmlFor="auth-email">Email address</label><input id="auth-email" name="email" type="email" autoComplete="email" maxLength="254" required /></div>
+          <div className="auth-field"><label htmlFor="auth-password">Password</label><div className="auth-password-field"><input id="auth-password" name="password" type={showPassword ? 'text' : 'password'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={mode === 'register' ? 12 : undefined} maxLength="128" required /><button type="button" className="auth-password-toggle" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></div>{mode === 'register' && <small>Use at least 12 characters.</small>}</div>
+          {message && <p className="auth-error" role="alert">{message}</p>}
+          <Button className="auth-submit" type="submit" disabled={busy}>{busy ? <LoaderCircle className="spin-icon" size={17} /> : <>{mode === 'login' ? 'Sign in' : 'Create account'}<ArrowRight size={17} /></>}</Button>
+        </form>
+        <div className="auth-switch"><span>{mode === 'login' ? 'New to ProjectPool?' : 'Already have an account?'}</span><button type="button" onClick={changeMode}>{mode === 'login' ? 'Create an account' : 'Sign in'}</button></div>
+      </div>
+      <p className="auth-panel-footer"><ShieldCheck size={14} /> Your account helps keep your saved ideas in one place.</p>
+    </div>
+  </section>
 }
 
 const projectListFields = ['features', 'technology', 'deliverables', 'prerequisites', 'learningOutcomes', 'milestones', 'skills', 'tags']
